@@ -59,10 +59,22 @@ def build_card(cfg: dict, day: int, body: str, checkin_url: str) -> dict:
     card["elements"].append(
         {
             "tag": "markdown",
-            "content": "✍️ **答题与批改**：完成练习后，打开打卡表 → 「每日答题」工作表 → 新建一行，日期填今天，把口语/写作答案填进对应列；次日随新卡片收到批改反馈。",
+            "content": "✍️ **答题与批改**：完成练习后，打开打卡表 → 「每日答题」工作表 → 新建一行，日期填今天，把**阅读/听力/写作**答案填进对应列；次日 10:00 先收到「昨日批改 + 参考答案」卡片，再收到今日任务卡片。",
         }
     )
     return card
+
+
+def build_feedback_card(cfg: dict, day: int, body: str) -> dict:
+    level_label = cfg["level"].upper()
+    return {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "title": {"tag": "plain_text", "content": f"BEC {level_label} 昨日批改 · 第 {day} 天"},
+            "template": "orange",
+        },
+        "elements": [{"tag": "markdown", "content": body[:5000]}],
+    }
 
 
 def send_card(webhook: str, card: dict) -> bool:
@@ -93,14 +105,26 @@ def main() -> int:
         return 1
 
     start = datetime.date.fromisoformat(cfg["start_date"])
-    day = max(1, (datetime.date.today() - start).days + 1)
-    content_file = BASE / "today_content.md"
-    if content_file.exists():
-        body = content_file.read_text(encoding="utf-8")
-    else:
-        body = "**今日内容生成失败**，请检查 GitHub Actions 日志或 DeepSeek 配置。"
+    today = datetime.date.today()
+    day = max(1, (today - start).days + 1)
+    mode = sys.argv[1] if len(sys.argv) > 1 else "today"
 
-    card = build_card(cfg, day, body, checkin_url)
+    if mode == "feedback":
+        feedback_file = BASE / "yesterday_feedback.md"
+        if not feedback_file.exists():
+            print("无昨日批改，跳过反馈卡片")
+            return 0
+        body = feedback_file.read_text(encoding="utf-8")
+        yesterday_day = max(1, ((today - datetime.timedelta(days=1)) - start).days + 1)
+        card = build_feedback_card(cfg, yesterday_day, body)
+    else:
+        content_file = BASE / "today_content.md"
+        if content_file.exists():
+            body = content_file.read_text(encoding="utf-8")
+        else:
+            body = "**今日内容生成失败**，请检查 GitHub Actions 日志或 DeepSeek 配置。"
+        card = build_card(cfg, day, body, checkin_url)
+
     if send_card(webhook, card):
         print("卡片已推送到飞书")
         return 0
