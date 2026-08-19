@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""生成当日 BEC 学习内容（调用 DeepSeek API）。"""
+"""生成当日 BEC 学习内容（调用 DeepSeek API）。
+当日卡片不含参考答案；参考答案写入飞书答题表，次日随批改卡片推送。
+"""
 
 import datetime
 import json
 import os
 import pathlib
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -26,6 +29,10 @@ WEEKS = [
     ("第12周 考前回顾", "高频词汇复盘、写作模板、口语模拟、应试策略"),
 ]
 
+ANSWER_MARKER = "## 参考答案与讲解"
+FIELD_DATE = "日期"
+FIELD_ANSWERS = "参考答案"
+
 
 def load_config() -> dict:
     with open(BASE / "config.json", encoding="utf-8") as f:
@@ -37,9 +44,9 @@ def build_prompt(cfg: dict, day: int, week_title: str, week_focus: str) -> str:
 
 今天是学习第 {day} 天，本周主题：{week_title}（{week_focus}）。
 该学习者每天约投入 {cfg['study_minutes_per_day']} 分钟，目标是通过 BEC {cfg['level']} 并在 HR 工作中流利使用英文（英文邮件、候选人电话/面试、阅读英文简历）。
-该学习者的弱项和重点：{'、'.join(cfg.get('focus_areas', []))}。口语任务要给出示范表达、跟读/复述建议；写作任务要给出模板化结构。
+该学习者的重点：{'、'.join(cfg.get('focus_areas', []))}。每日需要批改的练习是阅读、听力、写作，请务必在最后的「参考答案与讲解」中给出这三项的答案与讲解；口语任务仅供自练，不需要答案。
 
-请按以下 markdown 结构输出当天内容（语言：讲解用中文，示例/练习用英文）：
+请按以下 markdown 结构输出当天内容（语言：讲解用中文，题目与材料用英文）：
 
 ## 今日主题
 一句话说明今天学什么、为什么重要。
@@ -48,18 +55,21 @@ def build_prompt(cfg: dict, day: int, week_title: str, week_focus: str) -> str:
 每个词一行：**单词** 音标 / 词性 / 中文释义 / HR 场景例句（英文）。
 
 ## 每日阅读短文（约 250 词）
-一篇贴合本周主题的商务英文短文，难度适合 BEC {cfg['level']}，附 3-4 个英文理解题，并额外给出 4-6 个文中生词/短语的中文注释（帮助扫清阅读障碍）。
+一篇贴合本周主题的商务英文短文，难度适合 BEC {cfg['level']}，附 3-4 个英文理解题。
 
-## 听力 / 口语任务
-一个结合 HR 场景的口语话题，附 2-3 个提示问题和表达要点。
+## 听力任务
+一段约 150 词的英文商务对话（以文字材料呈现，先让学习者听/读一遍再作答），附 3-4 个英文理解题。
+
+## 口语任务（自练，不批改）
+一个结合 HR 场景的口语话题，附 2-3 个提示问题。
 
 ## 写作任务
 一道 BEC 风格写作题（邮件或便条），附 2-3 条答题要点。
 
 ## 参考答案与讲解
-给出阅读题答案、口语示范要点、写作示范（约 80 词）及易错点讲解。
+给出阅读、听力、写作的参考答案与简要讲解（口语可给示范要点，但重点是前三项）。
 
-总长度控制在 1200 词以内，内容要具体、可直接上手练。"""
+注意：除「参考答案与讲解」这一节外，前面的题目部分绝对不要出现任何答案。总长度控制在 1200 词以内。"""
 
 
 def build_quiz_prompt(cfg: dict, week_no: int, week_title: str, week_focus: str) -> str:
@@ -116,6 +126,77 @@ def call_deepseek(api_key: str, model: str, prompt: str) -> str:
     return data["choices"][0]["message"]["content"]
 
 
+def get_tenant_token(app_id: str, app_secret: str) -> str:
+    payload = json.dumps({"app_id": app_id, "app_secret": app_secret}).encode("utf-8")
+    req = urllib.request.Request(
+        "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        data = json.load(resp)
+    if data.get("code") != 0:
+        raise RuntimeError(f"获取飞书凭证失败: {data}")
+    return data["tenant_access_token"]
+
+
+def feishu(method: str, url: str, token: str, body=None) -> dict:
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method=method,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.load(resp)
+    except urllib.error.HTTPError as exc:
+        result = json.loads(exc.read() or b"{}")
+    if result.get("code") != 0:
+        raise RuntimeError(f"飞书 API 错误: {result}")
+    return result
+
+
+def store_answers(app_token: str, table_id: str, date_str: str, answers: str) -> None:
+    app_id = os.environ.get("FEISHU_APP_ID", "").strip()
+    app_secret = os.environ.get("FEISHU_APP_SECRET", "").strip()
+    if not (app_id and app_secret):
+        raise RuntimeError("缺少飞书应用配置")
+    token = get_tenant_token(app_id, app_secret)
+    result = feishu(
+        "GET",
+        f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records?page_size=100",
+        token,
+    )
+    for item in result.get("data", {}).get("items", []):
+        if str(item.get("fields", {}).get(FIELD_DATE, "") or "").startswith(date_str):
+            feishu(
+                "PUT",
+                f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/{item['record_id']}",
+                token,
+                {"fields": {FIELD_ANSWERS: answers}},
+            )
+            return
+    feishu(
+        "POST",
+        f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records",
+        token,
+        {"fields": {FIELD_DATE: date_str, FIELD_ANSWERS: answers}},
+    )
+
+
+def split_tasks_and_answers(content: str) -> tuple:
+    match = re.search(r"^##\s*参考答案", content, flags=re.MULTILINE)
+    idx = match.start() if match else content.find(ANSWER_MARKER)
+    if idx == -1:
+        return content.strip(), ""
+    return content[:idx].strip(), content[idx:].strip()
+
+
 def main() -> int:
     cfg = load_config()
     api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
@@ -130,19 +211,32 @@ def main() -> int:
     week_idx = min((day - 1) // 7, len(WEEKS) - 1)
     week_title, week_focus = WEEKS[week_idx]
 
-    if today.weekday() == 6:  # 周日：本周周测
+    if today.weekday() == 6:  # 周日：本周周测（答案随卡片一起给）
         week_no = week_idx + 1
         prompt = build_quiz_prompt(cfg, week_no, week_title, week_focus)
+        content = call_deepseek(api_key, model, prompt)
+        (BASE / "today_content.md").write_text(content, encoding="utf-8")
         print(f"第 {week_no} 周周测内容已生成（{week_title}）")
-    else:
-        prompt = build_prompt(cfg, day, week_title, week_focus)
-        print(f"Day {day} 内容已生成（{week_title}）")
+        return 0
+
+    prompt = build_prompt(cfg, day, week_title, week_focus)
     content = call_deepseek(api_key, model, prompt)
-    feedback_file = BASE / "yesterday_feedback.md"
-    if feedback_file.exists():
-        feedback = feedback_file.read_text(encoding="utf-8").strip()
-        content = f"## 昨日批改反馈\n\n{feedback}\n\n---\n\n{content}"
-    (BASE / "today_content.md").write_text(content, encoding="utf-8")
+    tasks, answers = split_tasks_and_answers(content)
+    (BASE / "today_content.md").write_text(tasks, encoding="utf-8")
+    print(f"Day {day} 任务内容已生成（{week_title}，不含答案）")
+
+    app_token = os.environ.get("BITABLE_APP_TOKEN", "").strip()
+    table_id = os.environ.get("BITABLE_TABLE_ID", "").strip()
+    if answers and app_token and table_id:
+        try:
+            store_answers(app_token, table_id, today.isoformat(), answers)
+            print("参考答案已存入答题表，次日随批改推送")
+        except Exception as exc:  # noqa: BLE001
+            print(f"参考答案存入答题表失败：{exc}", file=sys.stderr)
+    elif not answers:
+        print("警告：本次生成未包含参考答案", file=sys.stderr)
+    else:
+        print("警告：缺少答题表配置，参考答案未存储", file=sys.stderr)
     return 0
 
 
