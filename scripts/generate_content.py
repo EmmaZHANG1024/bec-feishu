@@ -138,6 +138,10 @@ def main() -> int:
         prompt = build_prompt(cfg, day, week_title, week_focus)
         print(f"Day {day} 内容已生成（{week_title}）")
     content = call_deepseek(api_key, model, prompt)
+    feedback_file = BASE / "yesterday_feedback.md"
+    if feedback_file.exists():
+        feedback = feedback_file.read_text(encoding="utf-8").strip()
+        content = f"## 昨日批改反馈\n\n{feedback}\n\n---\n\n{content}"
     (BASE / "today_content.md").write_text(content, encoding="utf-8")
     return 0
 
