@@ -127,6 +127,13 @@ def build_quiz_prompt(cfg: dict, week_no: int, week_title: str, week_focus: str)
 总长度控制在 1400 词以内。"""
 
 
+def build_answers_prompt(tasks: str) -> str:
+    return f"""以下是今天已经生成的学习任务。请只输出「## 参考答案与讲解」这一节（标题必须保持为「## 参考答案与讲解」），内容包括阅读、听力、写作的参考答案与讲解，口语给出示范要点。不要重复题目原文。
+
+### 今日任务
+{tasks[:3000]}"""
+
+
 def call_deepseek(api_key: str, model: str, prompt: str, max_tokens: int = 4000) -> str:
     payload = {
         "model": model,
@@ -258,6 +265,11 @@ def main() -> int:
         print("参考答案未生成，自动重试一次", file=sys.stderr)
         content = call_deepseek(api_key, model, prompt, max_tokens=4000)
         tasks, answers = split_tasks_and_answers(content)
+    if not answers:
+        print("改用答案专项生成", file=sys.stderr)
+        answers = call_deepseek(api_key, model, build_answers_prompt(tasks), max_tokens=2500)
+        if not answers.startswith("#"):
+            answers = "## 参考答案与讲解\n\n" + answers
     (BASE / "today_content.md").write_text(tasks, encoding="utf-8")
     print(f"Day {day} 任务内容已生成（{week_title}，不含答案）")
 
