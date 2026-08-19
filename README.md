@@ -24,7 +24,7 @@
 3. 仓库 Settings → Secrets and variables → Actions → New repository secret，添加：
    - `FEISHU_WEBHOOK_URL`：第 1 步复制的 Webhook 地址
    - `DEEPSEEK_API_KEY`：DeepSeek 的 API Key（用于每天生成内容）
-   - `DEEPSEEK_MODEL`（可选）：默认 `deepseek-chat`
+   - `DEEPSEEK_MODEL`（可选）：默认 `deepseek-v4-flash`
 
 ### 第 3 步：准备打卡表（可选但推荐）
 
@@ -40,7 +40,7 @@
 
 - **改推送时间**：编辑 `.github/workflows/daily-bec.yml` 里的 `cron`（`0 2 * * *` = 北京时间 10:00，UTC+8）
 - **改学习级别 / 开始日期**：编辑 `config.json`
-- **换 AI 模型**：在 GitHub secret 里加 `DEEPSEEK_MODEL`（如 `deepseek-reasoner`）
+- **换 AI 模型**：在 GitHub secret 里加 `DEEPSEEK_MODEL`（默认 `deepseek-v4-flash`）
 
 ## 文件说明
 
