@@ -6,6 +6,7 @@ import json
 import os
 import pathlib
 import sys
+import urllib.error
 import urllib.request
 
 BASE = pathlib.Path(__file__).resolve().parent.parent
@@ -105,15 +106,20 @@ def call_deepseek(api_key: str, model: str, prompt: str) -> str:
             "Authorization": f"Bearer {api_key}",
         },
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        data = json.load(resp)
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.load(resp)
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", "replace")
+        print(f"DeepSeek API 错误 {exc.code}: {body}", file=sys.stderr)
+        raise
     return data["choices"][0]["message"]["content"]
 
 
 def main() -> int:
     cfg = load_config()
     api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
-    model = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat").strip()
+    model = os.environ.get("DEEPSEEK_MODEL", "").strip() or "deepseek-v4-flash"
     if not api_key:
         print("错误：缺少 DEEPSEEK_API_KEY 环境变量", file=sys.stderr)
         return 1
