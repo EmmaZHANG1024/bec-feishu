@@ -55,6 +55,13 @@ def build_card(cfg: dict, day: int, body: str, checkin_url: str) -> dict:
                 "content": "**完成今日任务后请点击打卡按钮**（需先在飞书多维表格建打卡表，并把链接配置到 `CHECKIN_URL`）。",
             }
         )
+    card["elements"].append({"tag": "hr"})
+    card["elements"].append(
+        {
+            "tag": "markdown",
+            "content": "✍️ **答题与批改**：完成练习后，打开打卡表 → 「每日答题」工作表 → 新建一行，日期填今天，把口语/写作答案填进对应列；次日随新卡片收到批改反馈。",
+        }
+    )
     return card
 
 
