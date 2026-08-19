@@ -9,6 +9,10 @@ import sys
 import urllib.request
 
 BASE = pathlib.Path(__file__).resolve().parent.parent
+LISTENING_RESOURCE_URL = (
+    "https://www.cambridgeenglish.cn/exams-and-tests/business-certificates/"
+    "business-vantage/preparation/"
+)
 
 
 def load_config() -> dict:
@@ -59,7 +63,7 @@ def build_card(cfg: dict, day: int, body: str, checkin_url: str) -> dict:
     card["elements"].append(
         {
             "tag": "markdown",
-            "content": "✍️ **答题与批改**：完成练习后，打开打卡表 → 「每日答题」工作表 → 新建一行，日期填今天，把**口语（文字稿）/阅读/听力/写作**答案填进对应列；次日 10:00 先收到「昨日批改 + 参考答案」卡片，再收到今日任务卡片。\n\n🎧 **听力练习**：建议配合剑桥官网 B2 Business Vantage 免费样题音频练习真实听力。",
+            "content": f"✍️ **答题与批改**：完成练习后，打开打卡表 → 「每日答题」工作表 → 新建一行，日期填今天，把**口语（文字稿）/阅读/听力/写作**答案填进对应列；次日 10:00 先收到「昨日批改 + 参考答案」卡片，再收到今日任务卡片。\n\n🎧 **听力音频（剑桥官方免费样题，含 MP3）**：[B2 Business Vantage 样题]({LISTENING_RESOURCE_URL})",
         }
     )
     return card
