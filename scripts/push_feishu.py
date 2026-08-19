@@ -15,6 +15,20 @@ LISTENING_RESOURCE_URL = (
 )
 
 
+def chunk_text(text: str, size: int = 4000) -> list:
+    """把长文本按行切分为多个片段，避免单元素超限导致内容被截断。"""
+    chunks, current = [], ""
+    for line in text.splitlines(keepends=True):
+        if current and len(current) + len(line) > size:
+            chunks.append(current)
+            current = line
+        else:
+            current += line
+    if current:
+        chunks.append(current)
+    return chunks or [""]
+
+
 def load_config() -> dict:
     with open(BASE / "config.json", encoding="utf-8") as f:
         return json.load(f)
@@ -34,7 +48,7 @@ def build_card(cfg: dict, day: int, body: str, checkin_url: str) -> dict:
             "title": {"tag": "plain_text", "content": header_title},
             "template": "blue",
         },
-        "elements": [{"tag": "markdown", "content": body[:5000]}],
+        "elements": [{"tag": "markdown", "content": part} for part in chunk_text(body)],
     }
     if checkin_url:
         card["elements"].append({"tag": "hr"})
@@ -77,7 +91,7 @@ def build_feedback_card(cfg: dict, day: int, body: str) -> dict:
             "title": {"tag": "plain_text", "content": f"BEC {level_label} 昨日批改 · 第 {day} 天"},
             "template": "orange",
         },
-        "elements": [{"tag": "markdown", "content": body[:5000]}],
+        "elements": [{"tag": "markdown", "content": part} for part in chunk_text(body)],
     }
 
 
