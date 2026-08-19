@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""读取飞书多维表格中的昨日答题，调用 DeepSeek 批改，并把反馈写进当天卡片。"""
+"""读取飞书答题表中昨日的阅读/听力/写作答案，对照参考答案批改，
+生成「昨日批改 + 参考答案」卡片内容（yesterday_feedback.md）。
+"""
 
 import datetime
 import json
@@ -12,8 +14,10 @@ import urllib.request
 BASE = pathlib.Path(__file__).resolve().parent.parent
 
 FIELD_DATE = "日期"
-FIELD_SPEAK = "口语回答"
+FIELD_READ = "阅读回答"
+FIELD_LISTEN = "听力回答"
 FIELD_WRITE = "写作回答"
+FIELD_REF = "参考答案"
 FIELD_STATUS = "批改状态"
 FIELD_FEEDBACK = "批改反馈"
 
@@ -71,21 +75,32 @@ def update_record(token: str, app_token: str, table_id: str, record_id: str, fie
     )
 
 
-def grade_with_deepseek(api_key: str, model: str, speak: str, write: str) -> str:
-    prompt = f"""你是一位严格的 BEC Vantage 阅卷老师。请批改学习者昨天的口语和写作练习，用中文输出反馈。
+def grade_with_deepseek(api_key: str, model: str, ref: str, read: str, listen: str, write: str) -> str:
+    prompt = f"""你是一位严格的 BEC Vantage 阅卷老师。请批改学习者昨天的阅读、听力、写作答案，用中文输出反馈。
 
-### 口语回答
-{speak or "（未填写）"}
+### 昨日参考答案
+{ref or "（未提供）"}
+
+### 阅读回答
+{read or "（未填写）"}
+
+### 听力回答
+{listen or "（未填写）"}
 
 ### 写作回答
 {write or "（未填写）"}
 
-请严格按以下 markdown 结构输出：
+请严格按以下 markdown 结构输出（只批改有内容的部分，未填写的项输出一行「未作答」即可）：
 
-## 口语批改
+## 阅读批改
+- 答案核对：逐题对照参考答案
 - 评分（1-10）：x/10
-- 优点：1-2 句
-- 问题与改进建议：2-3 条，给出更地道的英文表达示范
+- 问题与改进建议：2-3 条
+
+## 听力批改
+- 答案核对：逐题对照参考答案
+- 评分（1-10）：x/10
+- 问题与改进建议：2-3 条
 
 ## 写作批改
 - 评分（1-10）：x/10
@@ -144,19 +159,22 @@ def main() -> int:
             continue
         if str(fields.get(FIELD_STATUS, "") or "") == "已批改":
             continue
-        speak = str(fields.get(FIELD_SPEAK, "") or "").strip()
+        read = str(fields.get(FIELD_READ, "") or "").strip()
+        listen = str(fields.get(FIELD_LISTEN, "") or "").strip()
         write = str(fields.get(FIELD_WRITE, "") or "").strip()
-        if not speak and not write:
+        if not read and not listen and not write:
             continue
-        feedback = grade_with_deepseek(api_key, model, speak, write)
+        ref = str(fields.get(FIELD_REF, "") or "").strip()
+        grading = grade_with_deepseek(api_key, model, ref, read, listen, write)
+        combined = f"## 昨日参考答案\n\n{ref or '（未提供）'}\n\n---\n\n{grading}"
         update_record(
             token,
             app_token,
             table_id,
             record["record_id"],
-            {FIELD_STATUS: "已批改", FIELD_FEEDBACK: feedback},
+            {FIELD_STATUS: "已批改", FIELD_FEEDBACK: combined},
         )
-        feedbacks.append(feedback)
+        feedbacks.append(combined)
         graded += 1
         print(f"已批改 {yesterday} 的答题（第 {graded} 份）")
 
@@ -165,7 +183,7 @@ def main() -> int:
             "\n\n---\n\n".join(feedbacks),
             encoding="utf-8",
         )
-        print(f"共批改 {graded} 份答案，反馈已写入今日卡片")
+        print(f"共批改 {graded} 份答案，反馈已写入昨日批改卡片")
     else:
         if (BASE / "yesterday_feedback.md").exists():
             (BASE / "yesterday_feedback.md").unlink()
