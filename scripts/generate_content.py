@@ -98,7 +98,7 @@ def build_quiz_prompt(cfg: dict, week_no: int, week_title: str, week_focus: str)
 总长度控制在 1400 词以内。"""
 
 
-def call_deepseek(api_key: str, model: str, prompt: str) -> str:
+def call_deepseek(api_key: str, model: str, prompt: str, max_tokens: int = 4000) -> str:
     payload = {
         "model": model,
         "messages": [
@@ -106,7 +106,7 @@ def call_deepseek(api_key: str, model: str, prompt: str) -> str:
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.7,
-        "max_tokens": 2000,
+        "max_tokens": max_tokens,
     }
     req = urllib.request.Request(
         "https://api.deepseek.com/chat/completions",
@@ -190,7 +190,7 @@ def store_answers(app_token: str, table_id: str, date_str: str, answers: str) ->
 
 
 def split_tasks_and_answers(content: str) -> tuple:
-    match = re.search(r"^##\s*参考答案", content, flags=re.MULTILINE)
+    match = re.search(r"^#{2,3}\s*参考答案", content, flags=re.MULTILINE)
     idx = match.start() if match else content.find(ANSWER_MARKER)
     if idx == -1:
         return content.strip(), ""
@@ -214,14 +214,18 @@ def main() -> int:
     if today.weekday() == 6:  # 周日：本周周测（答案随卡片一起给）
         week_no = week_idx + 1
         prompt = build_quiz_prompt(cfg, week_no, week_title, week_focus)
-        content = call_deepseek(api_key, model, prompt)
+        content = call_deepseek(api_key, model, prompt, max_tokens=3000)
         (BASE / "today_content.md").write_text(content, encoding="utf-8")
         print(f"第 {week_no} 周周测内容已生成（{week_title}）")
         return 0
 
     prompt = build_prompt(cfg, day, week_title, week_focus)
-    content = call_deepseek(api_key, model, prompt)
+    content = call_deepseek(api_key, model, prompt, max_tokens=4000)
     tasks, answers = split_tasks_and_answers(content)
+    if not answers:
+        print("参考答案未生成，自动重试一次", file=sys.stderr)
+        content = call_deepseek(api_key, model, prompt, max_tokens=4000)
+        tasks, answers = split_tasks_and_answers(content)
     (BASE / "today_content.md").write_text(tasks, encoding="utf-8")
     print(f"Day {day} 任务内容已生成（{week_title}，不含答案）")
 
