@@ -32,6 +32,10 @@ WEEKS = [
 ANSWER_MARKER = "## 参考答案与讲解"
 FIELD_DATE = "日期"
 FIELD_ANSWERS = "参考答案"
+LISTENING_RESOURCE_URL = (
+    "https://www.cambridgeenglish.cn/exams-and-tests/business-certificates/"
+    "business-vantage/preparation/"
+)
 
 
 def load_config() -> dict:
@@ -59,6 +63,8 @@ def build_prompt(cfg: dict, day: int, week_title: str, week_focus: str) -> str:
 
 ## 听力任务
 一段约 150 词的英文商务对话（以文字材料呈现，先让学习者听/读一遍再作答），附 3-4 个英文理解题。提示学习者：可配合剑桥官网 B2 Business Vantage 免费样题音频做真实听力练习。
+听力任务这一节必须原样包含这一行（链接不能改）：
+🎧 听力音频（剑桥官方免费样题，含 MP3）：[B2 Business Vantage 样题]({LISTENING_RESOURCE_URL})
 
 ## 口语任务（录音并写出口语稿，次日批改）
 一个结合本周主题的口语话题，附 2-3 个提示问题；提示学习者先自己说并录音，再把口语稿写入答题表供次日批改。
@@ -88,6 +94,8 @@ def build_exam_prompt(cfg: dict, day: int, week_title: str, week_focus: str) -> 
 
 ## 听力专练
 一段约 180 词的英文商务对话或独白（文字版，提示配合官方样题音频练习），按听力真题题型出 3-4 题（填空/选择/匹配轮换）。
+听力专练这一节必须原样包含这一行（链接不能改）：
+🎧 听力音频（剑桥官方免费样题，含 MP3）：[B2 Business Vantage 样题]({LISTENING_RESOURCE_URL})
 
 ## 写作专练
 按 BEC 写作真题出题：Part 1（40-50 词内部短函）或 Part 2（120-140 词报告/提议/邮件），交替安排，写明词数要求和答题要点。
