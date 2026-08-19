@@ -14,6 +14,7 @@ import urllib.request
 BASE = pathlib.Path(__file__).resolve().parent.parent
 
 FIELD_DATE = "日期"
+FIELD_SPEAK = "口语回答"
 FIELD_READ = "阅读回答"
 FIELD_LISTEN = "听力回答"
 FIELD_WRITE = "写作回答"
@@ -75,11 +76,14 @@ def update_record(token: str, app_token: str, table_id: str, record_id: str, fie
     )
 
 
-def grade_with_deepseek(api_key: str, model: str, ref: str, read: str, listen: str, write: str) -> str:
-    prompt = f"""你是一位严格的 BEC Vantage 阅卷老师。请批改学习者昨天的阅读、听力、写作答案，用中文输出反馈。
+def grade_with_deepseek(api_key: str, model: str, ref: str, speak: str, read: str, listen: str, write: str) -> str:
+    prompt = f"""你是一位严格的 BEC Vantage 阅卷老师。请批改学习者昨天的口语（文字稿）、阅读、听力、写作答案，用中文输出反馈。
 
 ### 昨日参考答案
 {ref or "（未提供）"}
+
+### 口语回答（文字稿）
+{speak or "（未填写）"}
 
 ### 阅读回答
 {read or "（未填写）"}
@@ -91,6 +95,11 @@ def grade_with_deepseek(api_key: str, model: str, ref: str, read: str, listen: s
 {write or "（未填写）"}
 
 请严格按以下 markdown 结构输出（只批改有内容的部分，未填写的项输出一行「未作答」即可）：
+
+## 口语批改
+- 评分（1-10）：x/10
+- 优点与问题：2-3 条
+- 表达升级示范：给出更地道的英文说法
 
 ## 阅读批改
 - 答案核对：逐题对照参考答案
@@ -162,10 +171,11 @@ def main() -> int:
         read = str(fields.get(FIELD_READ, "") or "").strip()
         listen = str(fields.get(FIELD_LISTEN, "") or "").strip()
         write = str(fields.get(FIELD_WRITE, "") or "").strip()
-        if not read and not listen and not write:
+        speak = str(fields.get(FIELD_SPEAK, "") or "").strip()
+        if not speak and not read and not listen and not write:
             continue
         ref = str(fields.get(FIELD_REF, "") or "").strip()
-        grading = grade_with_deepseek(api_key, model, ref, read, listen, write)
+        grading = grade_with_deepseek(api_key, model, ref, speak, read, listen, write)
         combined = f"## 昨日参考答案\n\n{ref or '（未提供）'}\n\n---\n\n{grading}"
         update_record(
             token,
