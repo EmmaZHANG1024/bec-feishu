@@ -27,12 +27,13 @@
 3. 仓库 Settings → Secrets and variables → Actions → New repository secret，添加：
    - `FEISHU_WEBHOOK_URL`：第 1 步复制的 Webhook 地址
    - `DEEPSEEK_API_KEY`：DeepSeek 的 API Key（用于每天生成内容）
+   - `CHECKIN_URL`：你的飞书打卡表链接（见第 3 步）
    - `DEEPSEEK_MODEL`（可选）：默认 `deepseek-v4-flash`
 
 ### 第 3 步：准备打卡表（可选但推荐）
 
 1. 在飞书「多维表格」新建一张表，列：日期 / 完成情况
-2. 打卡表链接已填在 `config.json` 的 `checkin_url`（也可改用 GitHub 的 `CHECKIN_URL` 密钥覆盖）
+2. 把打卡表链接填到 GitHub 的 `CHECKIN_URL` 密钥里（卡片「今日打卡」按钮会打开这张表）
 3. 以后每天点击卡片上的「今日打卡」按钮就会打开这张表，勾选完成
 
 ## 手动测试
