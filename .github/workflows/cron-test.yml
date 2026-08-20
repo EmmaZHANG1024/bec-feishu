@@ -1,0 +1,14 @@
+name: Cron Test
+
+on:
+  schedule:
+    # 临时测试：02:30 UTC = 10:30 北京时间
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check time
+        run: echo "cron test fired at $(date -u)"
