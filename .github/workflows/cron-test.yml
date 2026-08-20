@@ -2,8 +2,8 @@ name: Cron Test
 
 on:
   schedule:
-    # 临时测试：02:30 UTC = 10:30 北京时间
-    - cron: "30 2 * * *"
+    # 临时测试：03:00 UTC = 11:00 北京时间（公开仓库定时验证）
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 jobs:
