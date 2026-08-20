@@ -218,6 +218,10 @@ def store_answers(app_token: str, table_id: str, date_str: str, answers: str) ->
     )
     for item in result.get("data", {}).get("items", []):
         if str(item.get("fields", {}).get(FIELD_DATE, "") or "").startswith(date_str):
+            existing_ref = str(item.get("fields", {}).get(FIELD_ANSWERS, "") or "").strip()
+            if existing_ref:
+                print(f"{date_str} 的参考答案已存在，保留首次生成版本，不覆盖")
+                return
             feishu(
                 "PUT",
                 f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/{item['record_id']}",
